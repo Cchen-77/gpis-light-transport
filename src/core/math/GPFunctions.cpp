@@ -20,6 +20,7 @@
 
 #include <ccomplex>
 #include <random>
+#include<iostream>
 
 namespace Tungsten {
 
@@ -564,7 +565,7 @@ namespace Tungsten {
     double ProceduralMean::mean(Vec3d a) const {
         auto p = vec_conv<Vec3f>(a);
         p = _invConfigTransform.transformPoint(p);
-        float m = (*_f)(a);
+        float m = (*_f)(vec_conv<Vec3d>(p));
         m *= _scale;
         return max(_min, m + _offset);
     }

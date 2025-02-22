@@ -189,7 +189,8 @@ if(Ceres_FOUND)
 endif()
 
 file(GLOB_RECURSE Core_SOURCES "src/core/*.cpp")
-add_library(core STATIC ${Core_SOURCES})
+file(GLOB_RECURSE Core_INCLUDES "src/core/*.hpp")
+add_library(core STATIC ${Core_SOURCES} ${Core_INCLUDES})
 
 add_library(facet-forge STATIC src/thirdparty/facet-forge/src/random.cpp)
 set(core_libs ${core_libs} facet-forge)

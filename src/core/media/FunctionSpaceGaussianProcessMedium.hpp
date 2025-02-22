@@ -9,6 +9,7 @@ class GaussianProcess;
 
 class FunctionSpaceGaussianProcessMedium : public GaussianProcessMedium
 {
+protected:
     int _samplePoints;
     double _stepSizeCov;
     double _stepSize;
@@ -16,7 +17,7 @@ class FunctionSpaceGaussianProcessMedium : public GaussianProcessMedium
 
 public:
     FunctionSpaceGaussianProcessMedium();
-    FunctionSpaceGaussianProcessMedium(std::shared_ptr<GaussianProcess> gp, 
+    FunctionSpaceGaussianProcessMedium(std::shared_ptr<GPSampleNode> gp, 
         std::vector<std::shared_ptr<PhaseFunction>> phase,
         float materialSigmaA, float materialSigmaS, float density, int samplePoints,
         GPCorrelationContext ctxt = GPCorrelationContext::Goldfish, 
@@ -27,7 +28,7 @@ public:
             _samplePoints(samplePoints), _stepSizeCov(stepSizeCov), _stepSize(stepSize), _skipSpace(skipSpace)
     {}
 
-    FunctionSpaceGaussianProcessMedium(std::shared_ptr<GaussianProcess> gp,
+    FunctionSpaceGaussianProcessMedium(std::shared_ptr<GPSampleNode> gp,
         float materialSigmaA, float materialSigmaS, float density, int samplePoints,
         GPCorrelationContext ctxt = GPCorrelationContext::Goldfish,
         GPIntersectMethod intersectMethod = GPIntersectMethod::GPDiscrete,

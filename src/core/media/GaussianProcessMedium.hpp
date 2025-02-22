@@ -55,6 +55,7 @@ struct MVNNormalDistribution : NormalDistribution {
 
 class GaussianProcessMedium : public Medium
 {
+protected:
     Vec3f _materialSigmaA, _materialSigmaS;
     float _density;
 
@@ -64,7 +65,6 @@ class GaussianProcessMedium : public Medium
 
     std::vector<std::shared_ptr<PhaseFunction>> _phaseFunctions;
 
-protected:
     GPCorrelationContext _ctxt = GPCorrelationContext::Goldfish;
     GPIntersectMethod _intersectMethod = GPIntersectMethod::GPDiscrete;
     GPNormalSamplingMethod _normalSamplingMethod = GPNormalSamplingMethod::ConditionedGaussian;

@@ -251,7 +251,7 @@ void GaussianProcess::setConditioning(
         if (lltSolver.info() == Eigen::ComputationInfo::Success) {
             succesfullSolve = true;
             _globalCondSolver = lltSolver;
-            std::cout << "Using LDLT solver for global conditioning.\n";
+            //std::cout << "Using LDLT solver for global conditioning.\n";
         }
     }
 
@@ -279,7 +279,7 @@ void GaussianProcess::setConditioning(
         if (bdcsvdSolver.info() == Eigen::ComputationInfo::Success) {
             succesfullSolve = true;
             _globalCondSolver = bdcsvdSolver;
-            std::cout << "Using BDCSVD solver for global conditioning.\n";
+            //std::cout << "Using BDCSVD solver for global conditioning.\n";
         }
     }
 
