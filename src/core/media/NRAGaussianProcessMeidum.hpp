@@ -3,8 +3,7 @@
 #include"FunctionSpaceGaussianProcessMedium.hpp"
 
 #include<atomic>
-#define ENABLE_COUNTER 1
-#define ENABLE_TIMER 1
+#define ENABLE_PROFILE 1
 namespace Tungsten {
 class NRAGaussianProcessMeidum :public FunctionSpaceGaussianProcessMedium {
     double NRAConditionFineCheckingDistance;
@@ -13,6 +12,9 @@ class NRAGaussianProcessMeidum :public FunctionSpaceGaussianProcessMedium {
     GaussianProcess* gaussianProcess = nullptr;
     bool degenerated = false;
     bool enableNRA = true;
+    // use fine checking to help skip empty space even when nra is not enable
+    bool finerSkip = true;
+    bool totallyOrigin = false;
 public:
     NRAGaussianProcessMeidum() :FunctionSpaceGaussianProcessMedium(), NRAConditionFineCheckingDistance(24), NRAConditionFineCheckingSamplePoints(32) {};
     NRAGaussianProcessMeidum(std::shared_ptr<GPSampleNode> gp,
@@ -28,25 +30,21 @@ public:
     {
         
     }
-#if(ENABLE_COUNTER||ENABLE_TIMER)
+#if(ENABLE_PROFILE)
     ~NRAGaussianProcessMeidum() {
         std::cout << "=================[info]=================" << '\n';
-#if(ENABLE_COUNTER)
         std::cout << "total Sample Distance: " << sampleDistanceCount.load() << '\n';
         std::cout << "skip: " << skipCount.load() << '\n';
         std::cout << "nra optimized:" << nraOptimizedCount.load() << '\n';
         std::cout << "origin intersect:" << originCount.load() << '\n';
-        std::cout << "fine checking times:" << fcCount.load() << '\n';
         std::cout << "function space intersect GP times:" << gpsampleCount.load() << '\n';
         std::cout << '\n';
-#endif
-#if(ENABLE_TIMER)
         std::cout << "total Sample Distance Time: " << totalTime.load() << "s\n";
         std::cout << "overhead time:" << overheadTime.load() << "s\n";
-        std::cout << "cdf caculate time: " << cdfTime.load() << "s\n";
-        std::cout << "nra optimized time:" << nraOptimizedTime.load() << "s\n";
-        std::cout << "origin time:" << originTime.load() << "s\n";
-#endif
+        std::cout << "nra time:" << nraCheckingTime.load() +nraSampleGraidentTime.load() <<"s " << "| avg: " << (nraCheckingTime.load() + nraSampleGraidentTime.load()) / nraOptimizedCount.load() << "s\n";
+        std::cout << "nra sample gradient time: " << nraSampleGraidentTime.load() << "s " << "| avg: " << nraSampleGraidentTime.load() / nraOptimizedCount.load() << "s\n";
+        std::cout << "origin time:" << originTime.load() << "s " << "| avg: " << originTime.load() / originCount.load() << "s\n";
+        std::cout << "origin sample gradient time: " << originSampleGraidentTime.load() << "s " <<"| avg: "<< originSampleGraidentTime.load()/originCount.load()<<"s\n";
         std::cout << "=======================================" << '\n';
     }
 #endif
@@ -73,20 +71,18 @@ public:
     /*virtual Vec3f transmittance(PathSampleGenerator& sampler, const Ray& ray, bool startOnSurface,
         bool endOnSurface, MediumSample * sample) const override;*/
 
-#if(ENABLE_COUNTER)
+#if(ENABLE_PROFILE)
     mutable std::atomic<int> sampleDistanceCount = 0;
     mutable std::atomic<int> skipCount = 0;
     mutable std::atomic<int> nraOptimizedCount = 0;
     mutable std::atomic<int> originCount = 0;
-
-    mutable std::atomic<int> fcCount = 0;
     mutable std::atomic<int> gpsampleCount = 0;
-#endif
-#if(ENABLE_TIMER)
+
     mutable std::atomic<double> overheadTime = 0.;
-    mutable std::atomic<double> cdfTime = 0.;
+    mutable std::atomic<double> nraCheckingTime = 0.;
+    mutable std::atomic<double> nraSampleGraidentTime = 0.;
     mutable std::atomic<double> originTime = 0.;
-    mutable std::atomic<double> nraOptimizedTime = 0.;
+    mutable std::atomic<double> originSampleGraidentTime = 0.;
     mutable std::atomic<double> totalTime = 0.;
 #endif
 };

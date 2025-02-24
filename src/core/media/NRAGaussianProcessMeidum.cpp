@@ -7,13 +7,15 @@ void NRAGaussianProcessMeidum::fromJson(JsonPtr value, const Scene& scene) {
     value.getField("nra_finechecking_distance", NRAConditionFineCheckingDistance);
     value.getField("nra_findechecking_sample_points", NRAConditionFineCheckingSamplePoints);
     value.getField("enable_nra", enableNRA);
+    value.getField("finer_skip", finerSkip);
+    value.getField("totally_origin", totallyOrigin);
 
     gaussianProcess = dynamic_cast<GaussianProcess*>(_gp.get());
     if (!gaussianProcess) {
         degenerated = true;
         std::cout << "NRAGaussianProcess degnerate to FunctionSpaceGaussianProcess since provided stochastic process is not a Gaussian process"<<'\n';
     }
-    if (_ctxt != GPCorrelationContext::Dori && _ctxt != GPCorrelationContext::Goldfish) {
+    if (_ctxt != GPCorrelationContext::Goldfish) {
         degenerated = true;
         std::cout << "NRAGaussianProcess degnerate to FunctionSpaceGaussianProcess since memory model is not Renewal or Renewal+" << '\n';
     }
@@ -31,7 +33,7 @@ rapidjson::Value NRAGaussianProcessMeidum::toJson(Allocator& allocator) const
             "nra_findechecking_sample_points", NRAConditionFineCheckingSamplePoints,
     };
 }
-#if(ENABLE_TIMER)
+#if(ENABLE_PROFILE)
 void atomic_add(std::atomic<double>& a, double b) {
     for (double g = a; !a.compare_exchange_weak(g, g + b););
 }
@@ -44,12 +46,12 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
         return FunctionSpaceGaussianProcessMedium::sampleDistance(sampler, ray, state, sample);
     }
 
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
     Timer totalTimer;
     totalTimer.start();
+    sampleDistanceCount.fetch_add(1);
 #endif 
 
-    sampleDistanceCount.fetch_add(1);
     sample.emission = Vec3f(0.0f);
     auto r = ray;
     size_t matId = 0;
@@ -63,7 +65,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
 
     if (state.bounce >= _maxBounce) {
 
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
         totalTimer.stop();
         atomic_add(totalTime, totalTimer.elapsed());
 #endif
@@ -78,7 +80,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
         sample.p = ray.pos() + sample.t * ray.dir();
         sample.phase = _phaseFunction.get();
 
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
         totalTimer.stop();
         atomic_add(totalTime,totalTimer.elapsed());
 #endif
@@ -94,7 +96,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
         sample.exited = true;
     }
     else {
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
         Timer overheadTimer;
         overheadTimer.start();
 #endif
@@ -105,7 +107,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
 
         // 3-sigma SDF marching to approch 'surface'
         GaussianProcess conditionedGP = *gaussianProcess;
-        if (!state.firstScatter) {
+        if (!state.firstScatter&&(enableNRA|| finerSkip)&&!totallyOrigin) {
             auto ctxt = std::static_pointer_cast<GPContextFunctionSpace>(state.gpContext);
             Vec3d lastIntersectPt = ctxt->points[ctxt->points.size() - 1];
             auto lastValues = std::static_pointer_cast<GPRealNodeValues>(ctxt->values);
@@ -140,17 +142,21 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
         }
         double sigma = std::sqrt(gaussianProcess->_cov->operator()(Derivative::None, Derivative::None, Vec3d{0.,0.,0.}, Vec3d{0.,0.,0.}, {}, {}));
         double sigma3 = 3 * sigma;
-        // in the unit of sigma
+        
         bool useNoReturnApproximation = false;
         double fcDistance = NRAConditionFineCheckingDistance;
         Derivative derivNone = Derivative::None;
         Derivative derivFirst = Derivative::First;
-     
-        while (startT<maxT) {
+        
+        while (startT<maxT&&!totallyOrigin) {
             Vec3d pos = ro + rd * startT;
             double distance = std::abs(gaussianProcess->_mean->operator()(Derivative::None, pos, {}));
             if (distance <= sigma3) {
-                if (1) {
+                if (enableNRA|| finerSkip) {
+#if (ENABLE_PROFILE)
+                    Timer nraCheckingTimer;
+                    nraCheckingTimer.start();
+#endif
                     useNoReturnApproximation = enableNRA;
                     bool noCollision = true;
                     double fcStepSize = std::min(fcDistance, maxT - startT) / (NRAConditionFineCheckingSamplePoints);
@@ -171,15 +177,8 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                             stddev = sqrt(stddev);
                             P = 0.5 * (1 + boost::math::erf((0 - mu) / (stddev * sqrt(2))));
                         }*/
-#if (ENABLE_TIMER)
-                        Timer cdfTimer;
-                        cdfTimer.start();
-#endif
                         double P = conditionedGP.cdf(curPos);
-#if (ENABLE_TIMER)
-                        cdfTimer.stop();
-                        atomic_add(cdfTime, cdfTimer.elapsed());
-#endif
+
                         if (P < lastP) {
                             useNoReturnApproximation = false;
                         }
@@ -189,14 +188,26 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                         if (P > 0.01) {
                             noCollision = false;
                         }
+                        if (!noCollision && !useNoReturnApproximation) {
+                            break;
+                        }
                         lastP = P;
                         lastT = curT;
+                        if (lastP > 0.99) {
+                            break;
+                        }
                     }
+#if (ENABLE_PROFILE)
+                    nraCheckingTimer.stop();
+#endif
                     if (useNoReturnApproximation) {
                         if (lastP < 0.99) {
                             useNoReturnApproximation = false;
                         }
                         else {
+#if (ENABLE_PROFILE)
+                            atomic_add(nraCheckingTime, nraCheckingTimer.elapsed());
+#endif
                             t = u > lastP ? lastT : invCDFu;
                             break;
                         }
@@ -210,25 +221,18 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
             }
             startT += std::max(1e-6, distance - sigma3);
         }
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
         overheadTimer.stop();
         atomic_add(overheadTime, overheadTimer.elapsed());
 #endif
         if(startT>maxT){
-#if(ENABLE_COUNTER)
+#if(ENABLE_PROFILE)
             skipCount.fetch_add(1);
 #endif
             sample.exited = true;
             t = maxT;
         }
         else if (useNoReturnApproximation) {
-#if(ENABLE_COUNTER)
-            nraOptimizedCount.fetch_add(1);
-#endif
-#if(ENABLE_TIMER)
-            Timer nraOptimizedTimer;
-            nraOptimizedTimer.start();
-#endif
             t = min(float(t), maxT);
             Vec3d ip = ro + t * rd;
             Eigen::MatrixXd v(2, 1);
@@ -249,24 +253,27 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
             state.lastGPId = gaussianProcess->_id;
 
             newValues->_isIntersect = true;
-            newValues->_gp = &conditionedGP;
+            newValues->_gp = gaussianProcess;
             Vec3d grad;
+#if(ENABLE_PROFILE)
+            nraOptimizedCount.fetch_add(1);
+            Timer nraSampleGraidentTimer;
+            nraSampleGraidentTimer.start();
+#endif
             newValues->sampleGrad(gaussianProcess->_id, ip, rd, newCtxt->points.data(), newCtxt->derivs.data(), sampler, grad);
+#if (ENABLE_PROFILE)
+            nraSampleGraidentTimer.stop();
+            atomic_add(nraSampleGraidentTime, nraSampleGraidentTimer.elapsed());
+#endif
 
             state.lastAniso = sample.aniso = grad;
             sample.exited = false;
             state.firstScatter = false;
-#if (ENABLE_TIMER)
-            nraOptimizedTimer.stop();
-            atomic_add(nraOptimizedTime, nraOptimizedTimer.elapsed());
-#endif
 
         }
         else {
-#if(ENABLE_COUNTER)
+#if(ENABLE_PROFILE)
             originCount.fetch_add(1);
-#endif
-#if(ENABLE_TIMER)
             Timer originTimer;
             originTimer.start();
 #endif
@@ -285,10 +292,18 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                     Vec3d ip = ro + rd * t;
 
                     Vec3d grad;
+#if(ENABLE_PROFILE)
+                    Timer originSampleGraidentTimer;
+                    originSampleGraidentTimer.start();
+#endif
                     if (!sampleGradient(sampler, ray, ip, state, grad)) {
                         std::cout << "Failed to sample gradient.\n";
                         return false;
                     }
+#if(ENABLE_PROFILE)
+                    originSampleGraidentTimer.stop();
+                    atomic_add(originSampleGraidentTime, originSampleGraidentTimer.elapsed());
+#endif
 
                     state.lastAniso = sample.aniso = grad;
                     state.firstScatter = false;
@@ -304,17 +319,17 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
 
                 // We only keep going in the case where we haven't finished processing the ray yet.
             } while (t < maxT && sample.exited);
-
-#if (ENABLE_TIMER)
+#if(ENABLE_PROFILE)
             originTimer.stop();
             atomic_add(originTime, originTimer.elapsed());
 #endif
+
         }
 
         if (!sample.exited) {
             if (sample.aniso.dot(vec_conv<Vec3d>(ray.dir())) > 0) {
                 //std::cout << "Sampled gradient at intersection point points in the wrong direction. "<< sample.aniso.dot(vec_conv<Vec3d>(ray.dir())) << "\n";
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
                 totalTimer.stop();
                 atomic_add(totalTime, totalTimer.elapsed());
 #endif
@@ -325,7 +340,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                 sample.aniso = Vec3d(1.f, 0.f, 0.f);
                 std::cout << "Gradient zero.\n";
 
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
                 totalTimer.stop();
                 atomic_add(totalTime, totalTimer.elapsed());
 #endif
@@ -354,7 +369,7 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
     sample.gpId = state.lastGPId;
     sample.ctxt = state.gpContext.get();
 
-#if (ENABLE_TIMER)
+#if (ENABLE_PROFILE)
     totalTimer.stop();
     atomic_add(totalTime, totalTimer.elapsed());
 #endif
