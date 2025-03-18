@@ -3,7 +3,7 @@
 #include"FunctionSpaceGaussianProcessMedium.hpp"
 
 #include<atomic>
-#define ENABLE_PROFILE 1
+#define ENABLE_PROFILE 0
 namespace Tungsten {
 class NRAGaussianProcessMeidum :public FunctionSpaceGaussianProcessMedium {
     double NRAConditionFineCheckingDistance;
