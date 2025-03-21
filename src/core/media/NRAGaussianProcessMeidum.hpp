@@ -3,7 +3,8 @@
 #include"FunctionSpaceGaussianProcessMedium.hpp"
 
 #include<atomic>
-#define ENABLE_PROFILE 0
+#include<mutex>
+#define ENABLE_PROFILE 1
 namespace Tungsten {
 class NRAGaussianProcessMeidum :public FunctionSpaceGaussianProcessMedium {
     double NRAConditionFineCheckingDistance;
@@ -37,6 +38,8 @@ public:
         std::cout << "skip: " << skipCount.load() << '\n';
         std::cout << "nra optimized:" << nraOptimizedCount.load() << '\n';
         std::cout << "origin intersect:" << originCount.load() << '\n';
+        std::cout << "NRA condtion 1 failed: " << fail1Count.load() << '\n';
+        std::cout << "NRA condtion 2 failed: " << fail2Count.load() << '\n';
         std::cout << "function space intersect GP times:" << gpsampleCount.load() << '\n';
         std::cout << '\n';
         std::cout << "total Sample Distance Time: " << totalTime.load() << "s\n";
@@ -76,6 +79,8 @@ public:
     mutable std::atomic<int> skipCount = 0;
     mutable std::atomic<int> nraOptimizedCount = 0;
     mutable std::atomic<int> originCount = 0;
+    mutable std::atomic<int> fail1Count = 0;
+    mutable std::atomic<int> fail2Count = 0;
     mutable std::atomic<int> gpsampleCount = 0;
 
     mutable std::atomic<double> overheadTime = 0.;
@@ -84,6 +89,8 @@ public:
     mutable std::atomic<double> originTime = 0.;
     mutable std::atomic<double> originSampleGraidentTime = 0.;
     mutable std::atomic<double> totalTime = 0.;
+
+    mutable std::mutex logMutex;
 #endif
 };
 

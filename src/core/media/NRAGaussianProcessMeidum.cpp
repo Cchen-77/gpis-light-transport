@@ -180,19 +180,26 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                         double P = conditionedGP.cdf(curPos);
 
                         if (P < lastP) {
-                            useNoReturnApproximation = false;
+                            if(lastP - P < 0.01){
+                                P = lastP;
+                            }
+                            else {
+                                useNoReturnApproximation = false;
+                                /*std::lock_guard lock(logMutex);
+                                std::cout << P << '<' << lastP << '\n';*/
+                            }
                         }
-                        if (u<P && u>lastP) {
+                        if (useNoReturnApproximation && u<P && u>lastP) {
                             invCDFu = lerp(lastT, curT, (u - lastP) / (P - lastP));
                         }
                         if (P > 0.01) {
                             noCollision = false;
                         }
+                        lastP = P;
+                        lastT = curT; 
                         if (!noCollision && !useNoReturnApproximation) {
                             break;
                         }
-                        lastP = P;
-                        lastT = curT;
                         if (lastP > 0.99) {
                             break;
                         }
@@ -200,9 +207,18 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
 #if (ENABLE_PROFILE)
                     nraCheckingTimer.stop();
 #endif
+                    if (noCollision) {
+                        startT += fcDistance;
+                        continue;
+                    }
                     if (useNoReturnApproximation) {
                         if (lastP < 0.99) {
                             useNoReturnApproximation = false;
+#if (ENABLE_PROFILE)
+                            fail2Count.fetch_add(1);
+#endif
+                           /* std::lock_guard lock(logMutex);
+                            std::cout << lastP << '\n';*/
                         }
                         else {
 #if (ENABLE_PROFILE)
@@ -212,10 +228,11 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                             break;
                         }
                     }
-                    if (noCollision) {
-                        startT += fcDistance;
-                        continue;
+#if (ENABLE_PROFILE)
+                    else {
+                        fail1Count.fetch_add(1);
                     }
+#endif
                 }
                 break;
             }
