@@ -157,18 +157,18 @@ namespace Tungsten {
 
         std::vector<double> discreteSpectralDensity;
 
-    private:
+    protected:
         virtual FloatD cov(Vec3Diff a, Vec3Diff b) const = 0;
         virtual FloatDD cov(Vec3DD a, Vec3DD b) const = 0;
         virtual double cov(Vec3d a, Vec3d b) const = 0;
-
+    
         virtual FloatD dcov_da(Vec3Diff a, Vec3Diff b, Eigen::Array3d dirA) const;
         virtual FloatD dcov_db(Vec3Diff a, Vec3Diff b, Eigen::Array3d dirB) const;
         virtual FloatDD dcov2_dadb(Vec3DD a, Vec3DD b, Eigen::Array3d dirA, Eigen::Array3d dirB) const;
     };
 
     class StationaryCovariance : public CovarianceFunction {
-    private:
+    protected:
         virtual FloatD cov(FloatD absq) const = 0;
         virtual FloatDD cov(FloatDD absq) const = 0;
         virtual double cov(double absq) const = 0;
@@ -1140,7 +1140,7 @@ namespace Tungsten {
             return vec_conv<Vec3d>(SampleWarp::uniformSphere(sampler.next2D()) * _aniso).normalized() * rad;
         }
 
-    private:
+    protected:
         float _sigma, _l;
 
         virtual FloatD cov(FloatD absq) const override {
@@ -1153,6 +1153,30 @@ namespace Tungsten {
 
         virtual double cov(double absq) const override {
             return sqr(_sigma) * exp(-(absq / (2 * sqr(_l))));
+        }
+
+        virtual FloatD dcov_da(Vec3Diff a, Vec3Diff b, Eigen::Array3d dirA) const {
+            Vec3d pa = vec_conv<Vec3d>(a);
+            Vec3d pb = vec_conv<Vec3d>(b);
+            Eigen::Vector3d q = vec_conv<Eigen::Vector3d>(pa - pb);
+
+            double k = StationaryCovariance::cov(pa, pb);
+            double dotVal = dirA.matrix().dot(q.matrix());
+            return (dotVal / sqr(_l)) * k;
+        }
+        virtual FloatD dcov_db(Vec3Diff a, Vec3Diff b, Eigen::Array3d dirB) const {
+            return dcov_da(b, a, dirB);
+        }
+        virtual FloatDD dcov2_dadb(Vec3DD a, Vec3DD b, Eigen::Array3d dirA, Eigen::Array3d dirB) const {
+            Vec3d pa = vec_conv<Vec3d>(a);
+            Vec3d pb = vec_conv<Vec3d>(b);
+            double k = StationaryCovariance::cov(pa, pb);
+            Eigen::Vector3d q = vec_conv<Eigen::Vector3d>(pa - pb);
+
+            double u_dot_v = dirA.matrix().dot(dirB.matrix());
+            double u_dot_diff = dirA.matrix().dot(q.matrix());
+            double v_dot_diff = dirB.matrix().dot(q.matrix());
+            return k / sqr(_l) * (u_dot_v - (u_dot_diff * v_dot_diff) / sqr(_l));
         }
     };
 
