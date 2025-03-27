@@ -6,7 +6,8 @@
 #include "VoxelMedium.hpp"
 #include "FunctionSpaceGaussianProcessMedium.hpp"
 #include "WeightSpaceGaussianProcessMedium.hpp"
-#include "NRAGaussianProcessMeidum.hpp"
+#include "OptimizedGPMedium/NRAGaussianProcessMeidum.hpp"
+#include "OptimizedGPMedium/FastGaussianProcessMedium.hpp"
 
 namespace Tungsten {
 
@@ -18,7 +19,8 @@ DEFINE_STRINGABLE_ENUM(MediumFactory, "medium", ({
     {"gaussian_process", std::make_shared<FunctionSpaceGaussianProcessMedium>},                 // Backwards compatability with old files
     {"function_space_gaussian_process", std::make_shared<FunctionSpaceGaussianProcessMedium>}, 
     {"weight_space_gaussian_process", std::make_shared<WeightSpaceGaussianProcessMedium>},
-    {"nra_gaussian_process",std::make_shared<NRAGaussianProcessMeidum>}
+    {"nra_gaussian_process",std::make_shared<NRAGaussianProcessMeidum>},
+    {"fast_gaussian_process",std::make_shared<FastGaussianProcessMedium>}
 }))
 
 }

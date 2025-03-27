@@ -571,7 +571,7 @@ namespace Tungsten {
     }
 
     Vec3d ProceduralMean::dmean_da(Vec3d a) const {
-        double eps = 0.001f;
+        double eps = 1e-6;
         double vals[] = {
             mean(a),
             mean(a + Vec3d(eps, 0.f, 0.f)),

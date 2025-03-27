@@ -5,6 +5,7 @@
 #include "IntTypes.hpp"
 #include "MathUtil.hpp"
 #include "Range.hpp"
+#include "Ray.hpp"
 
 #include "sse/SimdUtils.hpp"
 
@@ -166,7 +167,41 @@ inline Box3f narrow(const Box3fp &b)
 {
     return Box3f(narrow(b.min()), narrow(b.max()));
 }
+inline bool IntersectBox(const Box3f& bbox,const Ray& ray,float* hitt0,float* hitt1) {
+    float t0 = ray.nearT(), t1 = ray.farT();
+    for (int i = 0; i < 3; ++i) {
+        float invDir = 1. / ray.dir()[i];
+        float tNear = (bbox.min()[i] - ray.pos()[i]) * invDir;
+        float tFar = (bbox.max()[i] - ray.pos()[i]) * invDir;
+        if (tNear > tFar) std::swap(tNear, tFar);
+        t0 = tNear > t0 ? tNear : t0;
+        t1 = tFar < t1 ? tFar : t1;
+        if (t0 > t1) {
+            return false;
+        }
+    }
+    if (hitt0) *hitt0 = t0;
+    if (hitt1) *hitt1 = t1;
+    return true;
+}
 
+inline bool IntersectBox(const Box3d& bbox, const Ray& ray, double* hitt0, double* hitt1) {
+    double t0 = ray.nearT(), t1 = ray.farT();
+    for (int i = 0; i < 3; ++i) {
+        double invDir = 1. / ray.dir()[i];
+        double tNear = (bbox.min()[i] - ray.pos()[i]) * invDir;
+        double tFar = (bbox.max()[i] - ray.pos()[i]) * invDir;
+        if (tNear > tFar) std::swap(tNear, tFar);
+        t0 = tNear > t0 ? tNear : t0;
+        t1 = tFar < t1 ? tFar : t1;
+        if (t0 > t1) {
+            return false;
+        }
+    }
+    if (hitt0) *hitt0 = t0;
+    if (hitt1) *hitt1 = t1;
+    return true;
+}
 }
 
 #endif // MATH_BOX_HPP_

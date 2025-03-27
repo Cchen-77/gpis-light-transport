@@ -116,6 +116,7 @@ include_directories(
 	src/thirdparty/spectra/include
 	src/thirdparty/libigl/include
 	src/thirdparty/facet-forge/include
+    src/thirdparty/LBFGSpp
 	${FCPW_EIGEN_INCLUDES})
 
 find_package(Imath)
@@ -220,7 +221,8 @@ set(tests
 	derivative-test realization-gen 
 	lod-gen microfacet-gen dft-realization-gen
 	intersection-test transmittance-test weight-space-test
-	phase-function-sampling bake-csg bin-to-vdb nspsr-test kernel-explorer)
+	phase-function-sampling bake-csg bin-to-vdb nspsr-test kernel-explorer 
+    bake-lckdtree)
 
 foreach (test IN LISTS tests)
 	add_executable(tungsten-${test} src/tungsten-test/${test}.cpp)

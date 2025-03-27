@@ -76,6 +76,9 @@ public:
     virtual void loadResources() override;
     virtual void saveResources() override;
 
+    Path GetSrcDir() const { return _srcDir; }
+    Path GetPath() const { return _path; }
+
     std::shared_ptr<Transmittance> fetchTransmittance(JsonPtr value) const;
     std::shared_ptr<PhaseFunction> fetchPhase(JsonPtr value) const;
     std::shared_ptr<Medium> fetchMedium(JsonPtr value) const;

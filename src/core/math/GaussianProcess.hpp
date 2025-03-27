@@ -260,6 +260,13 @@ namespace Tungsten {
             const Vec3d* points, const Derivative* derivative_types, const Vec3d* ddirs,
             Vec3d deriv_dir, size_t numPts) const;
 
+        std::tuple<Eigen::VectorXd, CovMatrix> mean_and_cov_cond(
+            const Vec3d* points, const Derivative* derivative_types, size_t numPts,
+            const Vec3d* ddirs,
+            const Vec3d* cond_points, const GPRealNode* cond_values, const Derivative* cond_derivatives, size_t numCondPts,
+            const Vec3d* cond_ddirs,
+            Vec3d deriv_dir) const;
+
         virtual Eigen::VectorXd mean(
             const Vec3d* points, const Derivative* derivative_types, const Vec3d* ddirs,
             Vec3d deriv_dir, size_t numPts) const override;

@@ -344,6 +344,109 @@ std::tuple<Eigen::VectorXd, CovMatrix> GaussianProcess::mean_and_cov(
     return { ps_mean, ps_cov };
 }
 
+double _eigvalsh_to_eps(const Eigen::VectorXd& s) {
+    return 1e6 * DBL_EPSILON * s.cwiseAbs().maxCoeff();
+}
+
+Eigen::VectorXd _pinv_1d(const Eigen::VectorXd& v, double eps = 1e-5) {
+    return v.cwiseAbs().cwiseLessOrEqual(eps).select(
+        0., v.cwiseInverse()
+    );
+}
+
+CovMatrix pseudo_inverse(const CovMatrix& a) {
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigs(a);
+    double eps = _eigvalsh_to_eps(eigs.eigenvalues());
+    Eigen::VectorXd s_pinv = _pinv_1d(eigs.eigenvalues(), eps);
+    Eigen::MatrixXd U = eigs.eigenvectors() * s_pinv.cwiseSqrt().asDiagonal();
+    return U * U.transpose();
+}
+
+std::tuple<Eigen::VectorXd, CovMatrix> GaussianProcess::mean_and_cov_cond(const Vec3d* points, const Derivative* derivative_types, size_t numPts,
+    const Vec3d* ddirs,
+    const Vec3d* cond_points, const GPRealNode* cond_values, const Derivative* cond_derivative_types, size_t numCondPts,
+    const Vec3d* cond_ddirs,
+    Vec3d deriv_dir) const
+{
+    if (numCondPts == 0) {
+        return mean_and_cov(points, derivative_types, ddirs, deriv_dir, numPts); 
+    }
+
+    CovMatrix s11 = cov_sym(
+        cond_points,
+        cond_derivative_types,
+        cond_ddirs,
+        deriv_dir, numCondPts);
+
+    CovMatrix s12 = cov(
+        cond_points, points,
+        cond_derivative_types, derivative_types,
+        cond_ddirs, ddirs,
+        deriv_dir, numCondPts, numPts);
+
+
+    CovMatrix solved;
+    if (_usePseudoInverse) {
+        solved = (pseudo_inverse(s11) * s12).transpose();
+    }
+    else {
+        bool succesfullSolve = false;
+        if (true || s11.rows() <= 64) {
+#ifdef SPARSE_COV
+            Eigen::SimplicialLDLT<CovMatrix> solver(s11);
+#else
+            Eigen::LDLT<CovMatrix> solver(s11.triangularView<Eigen::Lower>());
+#endif
+            if (solver.info() == Eigen::ComputationInfo::Success && solver.isPositive()) {
+                solved = solver.solve(s12).transpose();
+                if (solver.info() == Eigen::ComputationInfo::Success) {
+                    succesfullSolve = true;
+                }
+                else {
+                    std::cerr << "Conditioning solving failed (LDLT)!\n";
+                }
+            }
+        }
+
+
+        if (!succesfullSolve) {
+            Eigen::BDCSVD<Eigen::MatrixXd, Eigen::ComputeThinU | Eigen::ComputeThinV> solver;
+            solver.compute(s11.triangularView<Eigen::Lower>());
+
+            if (solver.info() != Eigen::ComputationInfo::Success) {
+                std::cerr << "Conditioning decomposition failed (BDCSVD)!\n";
+            }
+
+#ifdef SPARSE_COV
+            Eigen::MatrixXd solvedDense = solver.solve(s12.toDense()).transpose();
+            solved = solvedDense.sparseView();
+#else
+            solved = solver.solve(s12).transpose();
+#endif
+            if (solver.info() != Eigen::ComputationInfo::Success) {
+                std::cerr << "Conditioning solving failed (BDCSVD)!\n";
+            }
+        }
+    }
+    auto real = (const GPRealNodeValues*)(cond_values);
+    Eigen::Map<const Eigen::VectorXd> cond_values_view(real->_values.data(), numCondPts);
+    Eigen::VectorXd m2 = mean(points, derivative_types, ddirs, deriv_dir, numPts) + (solved * (cond_values_view - mean(cond_points, cond_derivative_types, cond_ddirs, deriv_dir, numCondPts)));
+
+    CovMatrix s22 = cov_sym(
+        points,
+        derivative_types,
+        ddirs,
+        deriv_dir, numPts);
+
+    CovMatrix s2 = s22 - (solved * s12);
+
+    if (_requireCovProjection) {
+        s2 = project_to_psd(s2);
+    }
+
+    return { m2,s2 };
+}
+
 Eigen::VectorXd GaussianProcess::mean_prior(
     const Vec3d * points, const Derivative * derivative_types, const Vec3d * ddirs,
     Vec3d deriv_dir, size_t numPts) const {
@@ -560,25 +663,6 @@ double GaussianProcess::eval(
     auto [ps_mean, ps_cov] = mean_and_cov(points, derivative_types, ddirs, deriv_dir, numPts);
     auto mvn = MultivariateNormalDistribution(ps_mean, ps_cov);
     return mvn.eval(eval_values_View);
-}
-
-double _eigvalsh_to_eps(const Eigen::VectorXd& s) {
-    return 1e6 * DBL_EPSILON * s.cwiseAbs().maxCoeff();
-}
-
-Eigen::VectorXd _pinv_1d(const Eigen::VectorXd& v, double eps = 1e-5) {
-    return v.cwiseAbs().cwiseLessOrEqual(eps).select(
-        0., v.cwiseInverse()
-    );
-}
-
-
-CovMatrix pseudo_inverse(const CovMatrix& a) {
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigs(a);
-    double eps = _eigvalsh_to_eps(eigs.eigenvalues());
-    Eigen::VectorXd s_pinv = _pinv_1d(eigs.eigenvalues(), eps);
-    Eigen::MatrixXd U = eigs.eigenvectors() * s_pinv.cwiseSqrt().asDiagonal();
-    return U * U.transpose();
 }
 
 MultivariateNormalDistribution GaussianProcess::create_mvn_cond(

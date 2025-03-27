@@ -107,7 +107,7 @@ public:
     virtual std::shared_ptr<NormalDistribution> normalDistribution(const Ray& ray, const Vec3d& ip, MediumState& state) const { return nullptr; }
 
     bool intersect(PathSampleGenerator& sampler, const Ray& ray, MediumState& state, double& t) const;
-    virtual bool intersectGP(PathSampleGenerator& sampler, const Ray& ray, MediumState& state, double& t) const = 0;
+    virtual bool intersectGP(PathSampleGenerator& sampler, const Ray& ray, MediumState& state, double& t) const { return false; }
     bool intersectMean(PathSampleGenerator& sampler, const Ray& ray, MediumState& state, double& t) const;
 
     virtual bool sampleDistance(PathSampleGenerator &sampler, const Ray &ray,

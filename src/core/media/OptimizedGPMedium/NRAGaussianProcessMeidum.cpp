@@ -1,6 +1,7 @@
 #include "NRAGaussianProcessMeidum.hpp"
 #include "Timer.hpp"
 #include <boost/math/special_functions/erf.hpp>
+#include <boost/math/distributions/normal.hpp>
 namespace Tungsten {
 void NRAGaussianProcessMeidum::fromJson(JsonPtr value, const Scene& scene) {
 	FunctionSpaceGaussianProcessMedium::fromJson(value, scene);
@@ -196,7 +197,8 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
                         }*/
                         double stddev = std::sqrt(covs(i - 1, i - 1));
                         double mu = means(i - 1);
-                        double P = 0.5 * (1 + boost::math::erf((0 - mu) / (stddev * sqrt(2))));
+                        boost::math::normal_distribution<> normal(0, 1);
+                        double P = boost::math::cdf(normal, -mu / stddev);
 
                         if (P < lastP) {
                             if(lastP - P < 0.01){
@@ -229,7 +231,9 @@ bool NRAGaussianProcessMeidum::sampleDistance(PathSampleGenerator& sampler, cons
 #endif
                     if (noCollision) {
                         startT += fcDistance + 1e-4;
+#if (ENABLE_PROFILE)
                         skipCheckingTime += nraCheckingTimer.elapsed();
+#endif
                         continue;
                     }
                     if (useNoReturnApproximation) {

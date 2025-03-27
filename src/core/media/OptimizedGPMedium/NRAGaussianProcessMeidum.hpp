@@ -1,10 +1,10 @@
 #ifndef NRAGAUSSIANPROCESSMEDIUM_HPP_
 #define NRAGAUSSIANPROCESSMEDIUM_HPP_
-#include"FunctionSpaceGaussianProcessMedium.hpp"
+#include"media/FunctionSpaceGaussianProcessMedium.hpp"
 
 #include<atomic>
 #include<mutex>
-#define ENABLE_PROFILE 1
+#define ENABLE_PROFILE 0
 namespace Tungsten {
 class NRAGaussianProcessMeidum :public FunctionSpaceGaussianProcessMedium {
     double NRAConditionFineCheckingDistance;
